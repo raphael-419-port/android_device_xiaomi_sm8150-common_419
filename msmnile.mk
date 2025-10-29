@@ -95,7 +95,7 @@ PRODUCT_PACKAGES += \
     android.hardware.soundtrigger@2.2-impl
 
 PRODUCT_PACKAGES += \
-    audio_amplifier.tas2562 \
+    audio_amplifier.tas256x \
     audio.bluetooth.default \
     audio.primary.msmnile \
     audio.r_submix.default \

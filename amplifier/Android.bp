@@ -4,13 +4,13 @@
 //
 
 cc_library_shared {
-    name: "audio_amplifier.tas2562",
+    name: "audio_amplifier.tas256x",
     relative_install_path: "hw",
     vendor: true,
     owner: "qti",
 
     srcs: [
-        "tas2562.c",
+        "tas256x.c",
     ],
 
     include_dirs: [

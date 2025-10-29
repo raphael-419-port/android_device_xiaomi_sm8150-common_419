@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_TAG "amplifier_tas2562"
+#define LOG_TAG "amplifier_tas256x"
 #define LOG_NDEBUG 0
 
 #include <dlfcn.h>
@@ -21,27 +21,27 @@
 #include "platform.h"
 #include "platform_api.h"
 
-#define TAS2562_ALGO_PROFILE "TAS25XX_ALGO_PROFILE"
-#define TAS2562_SMARTPA_ENABLE "TAS25XX_SMARTPA_ENABLE"
+#define TAS256x_ALGO_PROFILE "TAS25XX_ALGO_PROFILE"
+#define TAS256x_SMARTPA_ENABLE "TAS25XX_SMARTPA_ENABLE"
 
-typedef enum tas2562_profile {
+typedef enum tas256x_profile {
     PROFILE_NONE = -1,
     PROFILE_MUSIC = 0,
     PROFILE_VOICE,
     PROFILE_VOIP,
     PROFILE_RINGTONE,
     PROFILE_MAX = PROFILE_RINGTONE,
-} tas2562_profile_t;
+} tas256x_profile_t;
 
-#define TAS2562_PROFILE(x) [PROFILE_##x] = #x
-static const char* tas2562_profile_names[] = {
-        TAS2562_PROFILE(MUSIC),
-        TAS2562_PROFILE(VOICE),
-        TAS2562_PROFILE(VOIP),
-        TAS2562_PROFILE(RINGTONE),
+#define TAS256x_PROFILE(x) [PROFILE_##x] = #x
+static const char* tas256x_profile_names[] = {
+        TAS256x_PROFILE(MUSIC),
+        TAS256x_PROFILE(VOICE),
+        TAS256x_PROFILE(VOIP),
+        TAS256x_PROFILE(RINGTONE),
 };
 
-static const struct pcm_config tas2562_pcm_config = {
+static const struct pcm_config tas256x_pcm_config = {
         .channels = 2,
         .rate = 48000,
         .period_size = 256,
@@ -49,9 +49,9 @@ static const struct pcm_config tas2562_pcm_config = {
         .format = PCM_FORMAT_S24_LE,
 };
 
-typedef struct tas2562_amp {
+typedef struct tas256x_amp {
     amplifier_device_t amp_dev;
-    tas2562_profile_t profile;
+    tas256x_profile_t profile;
     struct audio_device* adev;
     struct pcm* pcm;
     const struct hw_module_t* module_ahal;
@@ -61,9 +61,9 @@ typedef struct tas2562_amp {
     typeof(disable_audio_route)* disable_audio_route;
     typeof(platform_get_pcm_device_id)* platform_get_pcm_device_id;
     typeof(get_usecase_from_list)* get_usecase_from_list;
-} tas2562_amp_t;
+} tas256x_amp_t;
 
-static int tas2562_mixer_set_enum_by_string(struct mixer* mixer, const char* name,
+static int tas256x_mixer_set_enum_by_string(struct mixer* mixer, const char* name,
                                             const char* value) {
     struct mixer_ctl* ctl;
     int ret = 0;
@@ -86,7 +86,7 @@ static int tas2562_mixer_set_enum_by_string(struct mixer* mixer, const char* nam
     return ret;
 }
 
-static bool tas2562_is_speaker(uint32_t device) {
+static bool tas256x_is_speaker(uint32_t device) {
     bool is_speaker;
     switch (device) {
         case SND_DEVICE_OUT_SPEAKER:
@@ -112,48 +112,48 @@ static bool tas2562_is_speaker(uint32_t device) {
     return is_speaker;
 }
 
-static int tas2562_set_mode(amplifier_device_t* device, audio_mode_t mode) {
-    tas2562_amp_t* tas2562 = (tas2562_amp_t*)device;
+static int tas256x_set_mode(amplifier_device_t* device, audio_mode_t mode) {
+    tas256x_amp_t* tas256x = (tas256x_amp_t*)device;
 
-    if (!tas2562) {
+    if (!tas256x) {
         ALOGE("%s: Invalid params", __func__);
         return -EINVAL;
     }
 
     switch (mode) {
         case AUDIO_MODE_NORMAL:
-            tas2562->profile = PROFILE_MUSIC;
+            tas256x->profile = PROFILE_MUSIC;
             break;
         case AUDIO_MODE_RINGTONE:
-            tas2562->profile = PROFILE_RINGTONE;
+            tas256x->profile = PROFILE_RINGTONE;
             break;
         case AUDIO_MODE_IN_CALL:
-            tas2562->profile = PROFILE_VOICE;
+            tas256x->profile = PROFILE_VOICE;
             break;
         case AUDIO_MODE_IN_COMMUNICATION:
-            tas2562->profile = PROFILE_VOIP;
+            tas256x->profile = PROFILE_VOIP;
             break;
         default:
             break;
     }
 
-    ALOGI("%s: Setting profile to %s", __func__, tas2562_profile_names[tas2562->profile]);
+    ALOGI("%s: Setting profile to %s", __func__, tas256x_profile_names[tas256x->profile]);
 
     return 0;
 }
 
-static int tas2562_start_feedback(tas2562_amp_t* tas2562, uint32_t device) {
-    struct pcm_config pcm_config = tas2562_pcm_config;
-    struct audio_device* adev = tas2562->adev;
+static int tas256x_start_feedback(tas256x_amp_t* tas256x, uint32_t device) {
+    struct pcm_config pcm_config = tas256x_pcm_config;
+    struct audio_device* adev = tas256x->adev;
     struct mixer* mixer = adev->mixer;
     struct audio_usecase* usecase;
     const char* profile;
     struct pcm* pcm;
     int pcm_id, rc = 0;
 
-    if (!tas2562_is_speaker(device)) return 0;
+    if (!tas256x_is_speaker(device)) return 0;
 
-    if (tas2562->pcm) {
+    if (tas256x->pcm) {
         ALOGE("%s: Invalid state", __func__);
         return -EINVAL;
     }
@@ -171,16 +171,16 @@ static int tas2562_start_feedback(tas2562_amp_t* tas2562, uint32_t device) {
     list_init(&usecase->device_list);
     list_add_head(&adev->usecase_list, &usecase->list);
 
-    tas2562->enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
-    tas2562->enable_audio_route(adev, usecase);
+    tas256x->enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+    tas256x->enable_audio_route(adev, usecase);
 
-    profile = tas2562_profile_names[tas2562->profile];
+    profile = tas256x_profile_names[tas256x->profile];
     ALOGI("%s: Using profile %s", __func__, profile);
-    tas2562_mixer_set_enum_by_string(mixer, TAS2562_ALGO_PROFILE, profile);
+    tas256x_mixer_set_enum_by_string(mixer, TAS256x_ALGO_PROFILE, profile);
 
-    tas2562_mixer_set_enum_by_string(mixer, TAS2562_SMARTPA_ENABLE, "ENABLE");
+    tas256x_mixer_set_enum_by_string(mixer, TAS256x_SMARTPA_ENABLE, "ENABLE");
 
-    pcm_id = tas2562->platform_get_pcm_device_id(usecase->id, PCM_CAPTURE);
+    pcm_id = tas256x->platform_get_pcm_device_id(usecase->id, PCM_CAPTURE);
     if (pcm_id < 0) {
         ALOGE("%s: Invalid PCM device for usecase %d", __func__, usecase->id);
         rc = -ENODEV;
@@ -200,7 +200,7 @@ static int tas2562_start_feedback(tas2562_amp_t* tas2562, uint32_t device) {
         goto err_pcm_start;
     }
 
-    tas2562->pcm = pcm;
+    tas256x->pcm = pcm;
 
     ALOGI("%s: Feedback enabled successfully", __func__);
 
@@ -209,37 +209,37 @@ static int tas2562_start_feedback(tas2562_amp_t* tas2562, uint32_t device) {
 err_pcm_start:
     if (pcm) pcm_close(pcm);
 err_no_pcm:
-    tas2562_mixer_set_enum_by_string(mixer, TAS2562_SMARTPA_ENABLE, "DISABLE");
-    tas2562->disable_audio_route(adev, usecase);
-    tas2562->disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+    tas256x_mixer_set_enum_by_string(mixer, TAS256x_SMARTPA_ENABLE, "DISABLE");
+    tas256x->disable_audio_route(adev, usecase);
+    tas256x->disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
     list_remove(&usecase->list);
     free(usecase);
 
     return rc;
 }
 
-static int tas2562_stop_feedback(tas2562_amp_t* tas2562, uint32_t device) {
-    struct audio_device* adev = tas2562->adev;
+static int tas256x_stop_feedback(tas256x_amp_t* tas256x, uint32_t device) {
+    struct audio_device* adev = tas256x->adev;
     struct mixer* mixer = adev->mixer;
     struct audio_usecase* usecase;
 
-    if (!tas2562_is_speaker(device)) return 0;
+    if (!tas256x_is_speaker(device)) return 0;
 
-    if (!tas2562->pcm) {
+    if (!tas256x->pcm) {
         ALOGI("%s: Invalid state", __func__);
         return -EINVAL;
     }
 
-    pcm_close(tas2562->pcm);
-    tas2562->pcm = NULL;
+    pcm_close(tas256x->pcm);
+    tas256x->pcm = NULL;
 
-    tas2562_mixer_set_enum_by_string(mixer, TAS2562_SMARTPA_ENABLE, "DISABLE");
+    tas256x_mixer_set_enum_by_string(mixer, TAS256x_SMARTPA_ENABLE, "DISABLE");
 
-    tas2562->disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+    tas256x->disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
 
-    usecase = tas2562->get_usecase_from_list(adev, USECASE_AUDIO_SPKR_CALIB_TX);
+    usecase = tas256x->get_usecase_from_list(adev, USECASE_AUDIO_SPKR_CALIB_TX);
     if (usecase) {
-        tas2562->disable_audio_route(adev, usecase);
+        tas256x->disable_audio_route(adev, usecase);
         list_remove(&usecase->list);
         free(usecase);
     }
@@ -247,31 +247,31 @@ static int tas2562_stop_feedback(tas2562_amp_t* tas2562, uint32_t device) {
     return 0;
 }
 
-static int tas2562_set_feedback(struct amplifier_device* device, void* adev, uint32_t devices,
+static int tas256x_set_feedback(struct amplifier_device* device, void* adev, uint32_t devices,
                                 bool enable) {
-    tas2562_amp_t* tas2562 = (tas2562_amp_t*)device;
+    tas256x_amp_t* tas256x = (tas256x_amp_t*)device;
 
-    if (!adev || !tas2562) {
+    if (!adev || !tas256x) {
         ALOGE("%s: Invalid parameters", __func__);
         return -EINVAL;
     }
 
-    tas2562->adev = adev;
+    tas256x->adev = adev;
 
     if (enable)
-        return tas2562_start_feedback(tas2562, devices);
+        return tas256x_start_feedback(tas256x, devices);
     else
-        return tas2562_stop_feedback(tas2562, devices);
+        return tas256x_stop_feedback(tas256x, devices);
 }
 
-static int tas2562_dev_close(hw_device_t* device) {
+static int tas256x_dev_close(hw_device_t* device) {
     if (device) free(device);
 
     return 0;
 }
 
-static int tas2562_module_open(const hw_module_t* module, const char* name, hw_device_t** device) {
-    tas2562_amp_t* tas2562;
+static int tas256x_module_open(const hw_module_t* module, const char* name, hw_device_t** device) {
+    tas256x_amp_t* tas256x;
 
     if (strcmp(name, AMPLIFIER_HARDWARE_INTERFACE)) {
         ALOGE("%s:%d: %s does not match amplifier hardware interface name\n", __func__, __LINE__,
@@ -279,34 +279,34 @@ static int tas2562_module_open(const hw_module_t* module, const char* name, hw_d
         return -ENODEV;
     }
 
-    tas2562 = calloc(1, sizeof(*tas2562));
-    if (!tas2562) {
+    tas256x = calloc(1, sizeof(*tas256x));
+    if (!tas256x) {
         ALOGE("%s:%d: Unable to allocate memory for amplifier device\n", __func__, __LINE__);
         return -ENOMEM;
     }
 
-    tas2562->amp_dev.common.tag = HARDWARE_DEVICE_TAG;
-    tas2562->amp_dev.common.module = (hw_module_t*)module;
-    tas2562->amp_dev.common.version = HARDWARE_DEVICE_API_VERSION(1, 0);
-    tas2562->amp_dev.common.close = tas2562_dev_close;
+    tas256x->amp_dev.common.tag = HARDWARE_DEVICE_TAG;
+    tas256x->amp_dev.common.module = (hw_module_t*)module;
+    tas256x->amp_dev.common.version = HARDWARE_DEVICE_API_VERSION(1, 0);
+    tas256x->amp_dev.common.close = tas256x_dev_close;
 
-    tas2562->amp_dev.set_mode = tas2562_set_mode;
-    tas2562->amp_dev.set_feedback = tas2562_set_feedback;
+    tas256x->amp_dev.set_mode = tas256x_set_mode;
+    tas256x->amp_dev.set_feedback = tas256x_set_feedback;
 
-    tas2562->profile = PROFILE_MUSIC;
+    tas256x->profile = PROFILE_MUSIC;
 
     if (hw_get_module_by_class(AUDIO_HARDWARE_MODULE_ID, AUDIO_HARDWARE_MODULE_ID_PRIMARY,
-                               &tas2562->module_ahal)) {
+                               &tas256x->module_ahal)) {
         ALOGW("%s: Failed to load audio.primary", __func__);
         return -ENODEV;
     }
 
 #define LOAD_AHAL_SYMBOL(symbol)                                          \
     do {                                                                  \
-        tas2562->symbol = dlsym(tas2562->module_ahal->dso, #symbol);      \
-        if (tas2562->symbol == NULL) {                                    \
+        tas256x->symbol = dlsym(tas256x->module_ahal->dso, #symbol);      \
+        if (tas256x->symbol == NULL) {                                    \
             ALOGW("%s: %s not found (%s)", __func__, #symbol, dlerror()); \
-            free(tas2562);                                                \
+            free(tas256x);                                                \
             return -ENODEV;                                               \
         }                                                                 \
     } while (0)
@@ -320,13 +320,13 @@ static int tas2562_module_open(const hw_module_t* module, const char* name, hw_d
 
 #undef LOAD_AHAL_SYMBOL
 
-    *device = (hw_device_t*)tas2562;
+    *device = (hw_device_t*)tas256x;
 
     return 0;
 }
 
 static struct hw_module_methods_t hal_module_methods = {
-        .open = tas2562_module_open,
+        .open = tas256x_module_open,
 };
 
 /* clang-format off */
@@ -336,7 +336,7 @@ amplifier_module_t HAL_MODULE_INFO_SYM = {
         .module_api_version = AMPLIFIER_DEVICE_API_VERSION_CURRENT,
         .hal_api_version = HARDWARE_HAL_API_VERSION,
         .id = AMPLIFIER_HARDWARE_MODULE_ID,
-        .name = "TAS2562 audio amplifier HAL",
+        .name = "TAS256x audio amplifier HAL",
         .author = "Ivan Vecera <ivan@cera.cz>",
         .methods = &hal_module_methods,
     },
